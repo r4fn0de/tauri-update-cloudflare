@@ -43,6 +43,9 @@ const handleV1Request = async (
         return responses.NotFound();
     }
     const release = await getLatestRelease(request, env);
+    if (!release) {
+        return responses.NoContent();
+    }
 
     const remoteVersion = sanitizeVersion(release.tag_name.toLowerCase());
     if (!remoteVersion || !semverValid(remoteVersion)) {
@@ -109,6 +112,10 @@ const getLatestAssets = async (
     }
 
     const release = await getLatestRelease(request, env);
+    if (!release) {
+        return responses.NotFound();
+    }
+
     const downloadPath = release.assets.find(
         ({ name }) => name === fileName
     )?.browser_download_url;

@@ -50,9 +50,18 @@ export async function getReleases(
 export async function getLatestRelease(
     request: Request,
     env: Env
-): Promise<Release> {
+): Promise<Release | null> {
     const releases: Response = await getReleases(request, env);
-    return (await releases.json()) as Release;
+    if (!releases.ok) {
+        return null;
+    }
+
+    const release = (await releases.json()) as Release;
+    if (!release.tag_name || !Array.isArray(release.assets)) {
+        return null;
+    }
+
+    return release;
 }
 
 /**
