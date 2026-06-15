@@ -1,0 +1,14 @@
+wrangler.toml
+  h_6400716131bbc6 7-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.7",
+  "base_commit_sha": "25ebeb2ed72d8bfbe1d434db7a3cab760f80650a",
+  "prompts": {},
+  "humans": {
+    "h_6400716131bbc6": {
+      "author": "Rafael Porto <rafaelporto45rt5@proton.me>"
+    }
+  }
+}
