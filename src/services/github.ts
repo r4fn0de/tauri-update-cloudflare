@@ -3,6 +3,8 @@ import { Env } from '../../worker-configuration';
 export type Asset = {
     name: string;
     browser_download_url: string;
+    /** Present on GitHub API release assets; required for private-repo downloads. */
+    id?: number;
 };
 
 type Release = {
@@ -70,25 +72,46 @@ export async function getLatestRelease(
  * @param assets The assets to search for the signature
  * @returns The signature as a string or undefined if not found
  */
+function releaseAssetDownloadUrl(asset: Asset, env: Env): string {
+    if (asset.id != null) {
+        return `https://api.github.com/repos/${env.GITHUB_ACCOUNT}/${env.GITHUB_REPO}/releases/assets/${asset.id}`;
+    }
+    return asset.browser_download_url;
+}
+
 export async function findAssetSignature(
     fileName: string,
-    assets: Asset[]
+    assets: Asset[],
+    env?: Env
 ): Promise<string | undefined> {
-    // check in our assets if we have a file: `fileName.sig`
-    // by example fileName can be: App-1.0.0.zip
-
+    const sigName = `${fileName}.sig`;
     const foundSignature = assets.find(
-        (asset) => asset.name.toLowerCase() === `${fileName.toLowerCase()}.sig`
+        (asset) => asset.name.toLowerCase() === sigName.toLowerCase()
     );
 
-    if (!foundSignature) {
+    if (!foundSignature || !env) {
         return undefined;
     }
 
-    const response = await fetch(foundSignature.browser_download_url);
-    if (response.status !== 200) {
+    const headers = new Headers({
+        Accept: 'application/octet-stream',
+        'User-Agent': 'cove-updates-worker'
+    });
+
+    if (env.GITHUB_API_TOKEN?.length) {
+        headers.set('Authorization', `token ${env.GITHUB_API_TOKEN}`);
+    }
+
+    const response = await fetch(releaseAssetDownloadUrl(foundSignature, env), {
+        method: 'GET',
+        headers,
+        redirect: 'follow'
+    });
+
+    if (!response.ok) {
         return undefined;
     }
 
-    return await response.text();
+    const text = (await response.text()).trim();
+    return text.length > 0 ? text : undefined;
 }

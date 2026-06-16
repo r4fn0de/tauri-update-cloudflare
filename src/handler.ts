@@ -67,7 +67,14 @@ const handleV1Request = async (
         return responses.NotFound();
     }
 
-    const signature = await findAssetSignature(match.name, release.assets);
+    const signature = await findAssetSignature(match.name, release.assets, env);
+    if (!signature) {
+        console.error(
+            `Missing or unreadable signature for ${match.name} (check GITHUB_API_TOKEN and .sig asset)`
+        );
+        return responses.NotFound();
+    }
+
     const proxy = env.GITHUB_API_TOKEN?.length;
     const downloadURL = proxy
         ? createProxiedFileUrl(request, env, ctx, match.browser_download_url)
