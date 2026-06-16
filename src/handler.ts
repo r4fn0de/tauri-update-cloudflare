@@ -3,11 +3,14 @@ import semverValid from 'semver/functions/valid';
 import semverGt from 'semver/functions/gt';
 import { AVAILABLE_ARCHITECTURES, AVAILABLE_PLATFORMS } from './constants';
 import { handleLegacyRequest } from './legacy/handler';
-import { findAssetSignature, getLatestRelease } from './services/github';
+import {
+    fetchReleaseAsset,
+    findAssetSignature,
+    getLatestRelease
+} from './services/github';
 import { TauriUpdateResponse } from './types';
 import { sanitizeVersion } from './utils/versioning';
 
-import { WritableStream as WebWritableStream } from 'node:stream/web';
 import { Env } from '../worker-configuration';
 
 const SendJSON = (data: Record<string, unknown>) => {
@@ -123,27 +126,29 @@ const getLatestAssets = async (
         return responses.NotFound();
     }
 
-    const downloadPath = release.assets.find(
-        ({ name }) => name === fileName
-    )?.browser_download_url;
-
-    if (!downloadPath) {
-        throw new Error('Could not get file path from download URL');
+    const asset = release.assets.find(({ name }) => name === fileName);
+    if (!asset) {
+        return responses.NotFound();
     }
 
-    const { readable } = new TransformStream<Uint8Array, Uint8Array>();
-    const file_response = await fetch(downloadPath, {
-        method: 'GET',
-        redirect: 'follow'
+    const fileResponse = await fetchReleaseAsset(asset, env);
+    if (!fileResponse.ok || !fileResponse.body) {
+        console.error(
+            `Failed to download ${fileName}: HTTP ${fileResponse.status}`
+        );
+        return responses.NotFound();
+    }
+
+    const headers = new Headers();
+    const contentType = fileResponse.headers.get('Content-Type');
+    const contentLength = fileResponse.headers.get('Content-Length');
+    if (contentType) headers.set('Content-Type', contentType);
+    if (contentLength) headers.set('Content-Length', contentLength);
+
+    return new Response(fileResponse.body, {
+        status: fileResponse.status,
+        headers
     });
-
-    if (file_response.body) {
-        const webWritableStream = new WebWritableStream();
-        await file_response.body.pipeTo(webWritableStream);
-        return new Response(readable, file_response);
-    }
-
-    throw new Error('Could not get file body from download URL');
 };
 
 export async function handleRequest(

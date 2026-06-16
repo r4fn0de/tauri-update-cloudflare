@@ -72,11 +72,36 @@ export async function getLatestRelease(
  * @param assets The assets to search for the signature
  * @returns The signature as a string or undefined if not found
  */
-function releaseAssetDownloadUrl(asset: Asset, env: Env): string {
+export function releaseAssetDownloadUrl(asset: Asset, env: Env): string {
     if (asset.id != null) {
         return `https://api.github.com/repos/${env.GITHUB_ACCOUNT}/${env.GITHUB_REPO}/releases/assets/${asset.id}`;
     }
     return asset.browser_download_url;
+}
+
+function releaseAssetHeaders(env: Env): Headers {
+    const headers = new Headers({
+        Accept: 'application/octet-stream',
+        'User-Agent': 'cove-updates-worker'
+    });
+
+    if (env.GITHUB_API_TOKEN?.length) {
+        headers.set('Authorization', `token ${env.GITHUB_API_TOKEN}`);
+    }
+
+    return headers;
+}
+
+/** Download a release asset (uses API URL + token for private repos). */
+export async function fetchReleaseAsset(
+    asset: Asset,
+    env: Env
+): Promise<Response> {
+    return fetch(releaseAssetDownloadUrl(asset, env), {
+        method: 'GET',
+        headers: releaseAssetHeaders(env),
+        redirect: 'follow'
+    });
 }
 
 export async function findAssetSignature(
@@ -93,20 +118,7 @@ export async function findAssetSignature(
         return undefined;
     }
 
-    const headers = new Headers({
-        Accept: 'application/octet-stream',
-        'User-Agent': 'cove-updates-worker'
-    });
-
-    if (env.GITHUB_API_TOKEN?.length) {
-        headers.set('Authorization', `token ${env.GITHUB_API_TOKEN}`);
-    }
-
-    const response = await fetch(releaseAssetDownloadUrl(foundSignature, env), {
-        method: 'GET',
-        headers,
-        redirect: 'follow'
-    });
+    const response = await fetchReleaseAsset(foundSignature, env);
 
     if (!response.ok) {
         return undefined;
